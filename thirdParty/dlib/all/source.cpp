@@ -27,6 +27,7 @@
 #include "../dnn/tensor_tools.cpp"
 
 
+#define DLIB_ISO_CPP_ONLY
 #ifndef DLIB_ISO_CPP_ONLY
 // Code that depends on OS specific APIs
 
@@ -71,6 +72,7 @@
 #include "../image_saver/save_jpeg.cpp"
 #endif
 
+#define DLIB_NO_GUI_SUPPORT
 #ifndef DLIB_NO_GUI_SUPPORT
 #include "../gui_widgets/fonts.cpp"
 #include "../gui_widgets/widgets.cpp"

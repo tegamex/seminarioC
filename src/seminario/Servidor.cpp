@@ -12,6 +12,21 @@ Servidor::Servidor()
 Servidor::~Servidor()
 {}
 
+SString getRandomId(int len)
+{
+    SString s;
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+
+    for (int i = 0; i < len; ++i) {
+        s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+
+    return s;
+}
+
 void websocket_on_http(websocketpp::connection_hdl hdl) 
 {
     Servidor::getInstance()->websocketOnHttp( hdl );
@@ -46,7 +61,11 @@ void Servidor::websocketOnHttp( websocketpp::connection_hdl& hdl )
     con->set_status( websocketpp::http::status_code::ok );
     con->append_header( "access-control-allow-origin" , "*" );
     con->append_header( "content-type", "application/json; charset=UTF-8" );
-    string message="{ websocket: true, hasApi: false }";
+    string message;
+    if( m_salida.empty() )
+        message="{ websocket: true, hasApi: false , hasResult: false }";
+    else
+        message = m_salida;
     con->set_body( message.c_str() );
 }
 
@@ -109,6 +128,10 @@ void Servidor::websocketOnMessage( websocketpp::connection_hdl& hdl , websocket_
         return;
     }
     ////////////////////
+    if( !m_salida.empty() )
+    {
+        state=0;
+    }
     SString output;
     switch( state )
     {
@@ -139,29 +162,13 @@ void Servidor::websocketOnMessage( websocketpp::connection_hdl& hdl , websocket_
     writer.String("result");  
     writer.Key("id");           
     writer.String(document["id"].GetString());  
-    writer.Key("result");     
-    cout << 1 ;      
-    writer.String( output.c_str() );  
-    cout << 2 ;
+    writer.Key("result");
+    writer.String( output.c_str() );
     writer.EndObject();
-    /*
-    writer.StartObject();
-    writer.Key("msg");       
-    cout <<3 ;
-    writer.String("updated");  
-    writer.Key("methods"); 
-    writer.StartArray(); 
-    cout << 4;
-    writer.String(document["id"].GetString());  
-    writer.EndArray();
-    writer.EndObject();
-    cout << 5;
-    writer.EndArray();
-    //writer.EndObject();
-    */
-    SString salida;
-    salida.append( s.GetString() );
-    m_wsServer->send( hdl , salida.c_str() , salida.size()  , websocketpp::frame::opcode::text );
+    SString toSend;
+    toSend.append( s.GetString() );
+    m_salida= toSend;
+    m_wsServer->send( hdl , toSend.c_str() , toSend.size()  , websocketpp::frame::opcode::text );
 }
 
 void Servidor::uploadToTrain( const Value& params , SString& output )
@@ -172,21 +179,6 @@ void Servidor::uploadToTrain( const Value& params , SString& output )
 void Servidor::uploadToPredict( const Value& params , SString& output )
 {
     Learning::getInstance()->predict( params , output );
-}
-
-SString getRandomId(int len)
-{
-    SString s;
-    static const char alphanum[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
-
-    for (int i = 0; i < len; ++i) {
-        s += alphanum[rand() % (sizeof(alphanum) - 1)];
-    }
-
-    return s;
 }
 
 void Servidor::otherMessages( websocketpp::connection_hdl& hdl , Document& document )

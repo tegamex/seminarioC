@@ -24,6 +24,7 @@ public:
 	void otherMessages( websocketpp::connection_hdl& hdl , Document& document );
 protected:
 private:
+	SString m_salida;
 	static SUnique< Servidor > m_instance;
 	SUnique< websocket_server > m_wsServer;
 };

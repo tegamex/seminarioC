@@ -5,13 +5,26 @@
 using namespace dlib;
 using seminario::Learning;
 
+// Typedef de Data
 typedef matrix < double > SingleSample;
 typedef std::vector< SingleSample > SetSample;
 typedef std::vector< double > SetLabels;
+// Typedef de Normalizer
 typedef vector_normalizer< SingleSample > SetNormalizer;
-typedef radial_basis_kernel<SingleSample> KernelType;
-typedef decision_function<KernelType> DecisionFunction;
-typedef normalized_function<DecisionFunction> FunctionType;
+// Typedef de Kernels
+typedef radial_basis_kernel<SingleSample> RadialKernel;
+typedef sigmoid_kernel<SingleSample> SigmoidKernel;
+typedef polynomial_kernel<SingleSample> PolinomialKernel;
+typedef linear_kernel<SingleSample> LinearKernel;
+// Typedefe de Trainer
+template < typename kernel_type >
+using SvmTrainer = svm_nu_trainer< kernel_type >;
+// Typedef de Functiones de descision
+template < typename kernel_type >
+using DecisionFunction = decision_function < SvmTrainer< kernel_type > >;
+
+template < typename kernel_type >
+using FunctionType= normalized_function< DecisionFunction< kernel_type > >;
 
 const SString Learning::filesInputDirectory = "/home/kevin/ddpc/seminarioJs/.meteor/local/build/programs/server/assets/app/uploads/Text/";
 const SString Learning::filesOutputDirectory = "./savedFiles/";
@@ -135,19 +148,120 @@ bool readSample( const SString& filename , SingleSample& sample )
     return true;
 }
 
+template < typename kernel_type >
+void trainRadialKernel( Writer< StringBuffer >& writer , SvmTrainer< kernel_type >& trainer , SetSample& samples , SetLabels& labels , double max_nu )
+{
+    writer.StartArray();
+    for (double gamma = 0.01; gamma <= 1; gamma *= 5 )
+    {
+        for (double nu = 0.01; nu < max_nu; nu *= 5 )
+        {
+            trainer.set_kernel( kernel_type( gamma ) );
+            trainer.set_nu(nu);
+            cout << "gamma: " << gamma << "    nu: " << nu;
+            auto result = cross_validate_trainer( trainer , samples , labels , 3 );
+            cout << "    cross validation accuracy: "<< result;
+            writer.Key("gamma");
+            writer.Double( gamma );
+            writer.Key("nu");
+            writer.Double( nu );
+            writer.StartArray();
+            writer.Double( result( 0 ) );
+            writer.Double( result( 1 ) );
+            writer.EndArray();
+        }
+    }
+    writer.EndArray();  
+}
+
+
+template < typename kernel_type >
+void trainSigmoidKernel( Writer< StringBuffer >& writer , SvmTrainer< kernel_type >& trainer , SetSample& samples , SetLabels& labels , double max_nu )
+{
+    writer.StartArray();
+    for (double gamma = 0.01; gamma <= 1; gamma *= 5 )
+    {
+        for (double nu = 0.01; nu < max_nu; nu *= 5 )
+        {
+            trainer.set_kernel( kernel_type( gamma , 1 ) );
+            trainer.set_nu(nu);
+            cout << "gamma: " << gamma << "    nu: " << nu;
+            auto result=cross_validate_trainer( trainer , samples , labels , 3 );
+            cout << "cross validation accuracy: " << result ;
+            writer.Key("gamma");
+            writer.Double( gamma );
+            writer.Key("nu");
+            writer.Double( nu );
+            writer.StartArray();
+            writer.Double( result( 0 ) );
+            writer.Double( result( 1 ) );
+            writer.EndArray();
+        }
+    }
+    writer.EndArray();  
+}
+
+
+template < typename kernel_type >
+void trainPolynomialKernel( Writer< StringBuffer >& writer , SvmTrainer< kernel_type >& trainer , SetSample& samples , SetLabels& labels , double max_nu )
+{
+    writer.StartArray();
+    for (double gamma = 0.01; gamma <= 1; gamma *= 5 )
+    {
+        for (double nu = 0.01; nu < max_nu; nu *= 5 )
+        {
+            trainer.set_kernel( kernel_type( gamma , 1 , 2 ) );
+            trainer.set_nu(nu);
+            cout << "gamma: " << gamma << "    nu: " << nu;
+            auto result=cross_validate_trainer( trainer , samples , labels , 3 );
+            cout << "cross validation accuracy: " << result;
+            writer.Key("gamma");
+            writer.Double( gamma );
+            writer.Key("nu");
+            writer.Double( nu );
+            writer.StartArray();
+            writer.Double( result( 0 ) );
+            writer.Double( result( 1 ) );
+            writer.EndArray();
+        }
+    }
+    writer.EndArray();  
+}
+
+template < typename kernel_type >
+void trainLinearKernel( Writer< StringBuffer >& writer , SvmTrainer< kernel_type >& trainer , SetSample& samples , SetLabels& labels , double max_nu )
+{
+    writer.StartArray();
+    for (double nu = 0.01; nu < max_nu; nu *= 5 )
+    {
+        trainer.set_kernel( kernel_type() );
+        trainer.set_nu(nu);
+        cout << "gamma: " << gamma << "    nu: " << nu;
+        auto result= cross_validate_trainer( trainer , samples , labels , 3 );
+        cout << "cross validation accuracy: " << result;
+        writer.Key("nu");
+        writer.Double( nu );
+        writer.StartArray();
+        writer.Double( result( 0 ) );
+        writer.Double( result( 1 ) );
+        writer.EndArray();
+    }
+    writer.EndArray();  
+}
+
 void Learning::train( const Value& params , SString& output )
 {
-    output="ggwp";
-    if( true )
-    {
-        return;
-    }
+    StringBuffer s;
+    Writer< StringBuffer > writer( s );
+    writer.StartObject();  
     SString filename;
     if( !getFileAndExist( params , filename ) )
     {
-        output="{ error : \"no file\" }";
+        writer.Key("error");           
+        writer.String( "no file found" );
         return;
     }
+    Document doc;
     SetSample setSample;
     SetLabels setLabels;
     unsigned int countFields = 0;
@@ -155,10 +269,16 @@ void Learning::train( const Value& params , SString& output )
     // leyendo data
     if ( !readSamples( filesInputDirectory + filename +".csv" , setSample , setLabels , countFields , countSamples ) )
     {
-        output="{ error : \"file error\" }";
+        writer.Key("error");           
+        writer.String( "error reading file" );
         return;
     }
-    // Normalizando la data
+    writer.Key("countFeatures");           
+    writer.Uint( countFields );
+    writer.Key("countSample");           
+    writer.Uint( countSamples );
+
+
     SetNormalizer normalizer;
     normalizer.train(setSample);
     for ( unsigned long i = 0; i < countSamples ; ++i)
@@ -168,25 +288,25 @@ void Learning::train( const Value& params , SString& output )
     randomize_samples(setSample, setLabels);
     const double max_nu = maximum_nu(setLabels);
     cout << max_nu << endl;
-    // cross validation
-    svm_nu_trainer< KernelType > trainer;
-    cout << "starting cross validation" << endl;
-    for (double gamma = 0.00001; gamma <= 1; gamma *= 5)
-    {
-        for (double nu = 0.00001; nu < max_nu; nu *= 5)
-        {
-            trainer.set_kernel( KernelType( gamma ) );
-            trainer.set_nu(nu);
-            cout << "gamma: " << gamma << "    nu: " << nu;
-            cout << "cross validation accuracy: " << cross_validate_trainer( trainer , setSample , setLabels , 3 );
-        }
-    }
-    // seleccionando mejor funcion
-    FunctionType learned_function;
-    learned_function.normalizer = normalizer;
-    learned_function.function = trainer.train( setSample, setLabels );
-    // guardando data
-    serialize( filesOutputDirectory + filename +".dat") << learned_function;
+
+    writer.Key("radial");          
+    SvmTrainer< RadialKernel > trainerRadial;
+    trainRadialKernel(writer, trainerRadial , setSample , setLabels , max_nu );
+    
+    writer.Key("sigmoid");   
+    SvmTrainer< SigmoidKernel > trainerSigmoid;
+    trainSigmoidKernel(writer, trainerSigmoid , setSample , setLabels , max_nu );
+
+    writer.Key("lineal");    
+    SvmTrainer< LinearKernel > trainerLineal;
+    trainLinearKernel(writer, trainerLineal , setSample , setLabels , max_nu );
+
+    writer.Key("polinomial");           
+    SvmTrainer< PolinomialKernel > trainerPolinomial;
+    trainPolynomialKernel(writer, trainerPolinomial , setSample , setLabels , max_nu );
+    
+    writer.EndObject();
+    output = s.GetString();
 }
 
 void Learning::predict( const Value& params , string& output )
@@ -204,10 +324,5 @@ void Learning::predict( const Value& params , string& output )
         output="{ error : \"file error\" }";
         return;
     }
-    FunctionType learned_function;
-    deserialize( filesOutputDirectory + filenameTrained +".dat" ) >> learned_function;
-    auto result = learned_function(sample);
-    std::ostringstream s;
-    s << "{ result : \"" << result << "\" }";
-    output = s.str();
+    output="ok";
 }
