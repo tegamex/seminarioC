@@ -74,6 +74,23 @@ void Servidor::websocketOnOpen( websocketpp::connection_hdl& hdl )
     m_wsServer->send( hdl , "o", 1 , websocketpp::frame::opcode::text );
 }
 
+class Base{
+public:
+    virtual void serialize(Value& v, Value::AllocatorType& allocator){
+        v.AddMember("b", b, allocator);
+    }    
+    int b = 1;
+};
+
+class Derived : public Base{
+public:
+    virtual void serialize(Value& v, Value::AllocatorType& allocator){
+        Base::serialize(v, allocator);
+        v.AddMember("d", d, allocator);
+    }
+    int d = 2;
+};
+
 void Servidor::websocketOnMessage( websocketpp::connection_hdl& hdl , websocket_server::message_ptr& msg )
 {
     SString message = msg->get_payload();
@@ -154,20 +171,18 @@ void Servidor::websocketOnMessage( websocketpp::connection_hdl& hdl , websocket_
 
     StringBuffer s;
     Writer< StringBuffer > writer( s );
-    //writer.StartObject();
-    //writer.StartArray(); 
-    
     writer.StartObject();
     writer.Key("msg");           
     writer.String("result");  
-    writer.Key("id");           
+    writer.Key( "id");
     writer.String(document["id"].GetString());  
     writer.Key("result");
-    writer.String( output.c_str() );
+    writer.String( "ok" );
     writer.EndObject();
+
     SString toSend;
     toSend.append( s.GetString() );
-    m_salida= toSend;
+    m_salida= output;
     m_wsServer->send( hdl , toSend.c_str() , toSend.size()  , websocketpp::frame::opcode::text );
 }
 
